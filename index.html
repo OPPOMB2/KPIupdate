@@ -126,34 +126,29 @@
         let currentGroup = 'Staff';
         let radarChartInstance = null;
 
-        // --- ĐƯỜNG LINK GOOGLE SHEETS (Đã được chuyển sang dạng xuất CSV) ---
         const GOOGLE_SHEET_CSV_URL = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vSWkrS3coCC_3iPJ5nQqKU9NW-7Uu5BNVh1XBPBDD3ePi8UY9-xFJl0-mfuvNG6sMFRdyHen8oKJj_F/pub?gid=0&single=true&output=csv';
 
-        // 1. Tự động lấy dữ liệu từ Google Sheets
         async function fetchDataFromSheet() {
             const btnRefresh = document.getElementById('btn-refresh');
             const btnText = btnRefresh.querySelector('span');
             
-            // Hiệu ứng đang tải
             btnRefresh.classList.add('opacity-50', 'cursor-not-allowed');
             btnText.innerText = 'Đang tải...';
             
             try {
-                // Kéo dữ liệu từ link CSV của Google Sheets
                 const response = await fetch(GOOGLE_SHEET_CSV_URL);
                 if (!response.ok) throw new Error('Mất kết nối mạng hoặc link sai');
                 
-                // Chuyển đổi dữ liệu về dạng Array Buffer để thư viện XLSX đọc
-                const arrayBuffer = await response.arrayBuffer();
-                const data = new Uint8Array(arrayBuffer);
-                const workbook = XLSX.read(data, { type: 'array' });
+                // Đọc dạng text trực tiếp để tối ưu hóa định dạng CSV trong SheetJS
+                const csvText = await response.text();
+                const workbook = XLSX.read(csvText, { type: 'string' });
                 
                 const worksheet = workbook.Sheets[workbook.SheetNames[0]];
                 const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
                 
                 let headerIndex = 0;
                 for (let i = 0; i < jsonData.length; i++) {
-                    if (jsonData[i] && (jsonData[i].includes('SC Code') || jsonData[i].includes('Nhân viên'))) {
+                    if (jsonData[i] && jsonData[i].some(cell => cell && (cell.toString().includes('SC Code') || cell.toString().includes('Nhân viên')))) {
                         headerIndex = i;
                         break;
                     }
@@ -162,7 +157,6 @@
                 const headers = jsonData[headerIndex];
                 const referenceRow = jsonData[0] || [];
 
-                // Đẩy vào hàm phân tích có sẵn
                 processOPPODataAdvanced(jsonData, headers, headerIndex + 1, referenceRow);
                 
             } catch (error) {
@@ -171,16 +165,13 @@
                 document.getElementById('loading-text').classList.add('text-rose-500');
                 alert("Lỗi tải dữ liệu: Bạn hãy kiểm tra lại kết nối mạng hoặc đảm bảo Google Sheets đã được Publish to Web.");
             } finally {
-                // Khôi phục nút bấm
                 btnRefresh.classList.remove('opacity-50', 'cursor-not-allowed');
                 btnText.innerText = 'Làm mới';
             }
         }
 
-        // TỰ ĐỘNG CHẠY HÀM LẤY DỮ LIỆU KHI VỪA MỞ TRANG
         window.onload = fetchDataFromSheet;
 
-        // Các hàm bên dưới giữ nguyên như cũ
         function parseToNumericValue(val) {
             if (val === undefined || val === null || val === '-' || val === '') return null;
             let n = parseFloat(val);
@@ -189,7 +180,6 @@
             return n;
         }
 
-        // 2. Phân tích dữ liệu nâng cao dựa trên Ma trận cấu trúc tệp
         function processOPPODataAdvanced(jsonData, headers, startRowIndex, referenceRow) {
             rawExcelData = { Leader: {}, Staff: {} };
             
@@ -200,8 +190,18 @@
                 }
             });
 
-            const rawRefSale = referenceRow[34] !== undefined ? parseFloat(referenceRow[34]) : 15;
-            const refSalePercent = (rawRefSale / 15) * 100; 
+            // Tìm kiếm động cột Sale dựa trên tiêu đề thay vì gán cứng index 34
+            let saleColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('sale'));
+            if (saleColumnIndex === -1) saleColumnIndex = 34;
+
+            const rawRefSale = referenceRow[saleColumnIndex] !== undefined ? parseFloat(referenceRow[saleColumnIndex]) : 15;
+            const refSalePercent = rawRefSale > 0 ? (rawRefSale / 15) * 100 : 100; 
+
+            // Định danh động các nhóm tiêu đề để tránh lỗi Object luôn Truthy khi dùng toán tử || ngắn mạch
+            const whHeader = ['Tổng hợp chỉ số kho', 'Điểm Kho', 'KPI Kho', 'Chỉ số kho'].find(h => headers.includes(h)) || 'KPI Kho';
+            const opsHeader = ['KPI Vận hành', 'Điểm vận hành', 'Vận hành'].find(h => headers.includes(h)) || 'KPI Vận hành';
+            const serviceHeader = ['KPI Service', 'Tổng hợp', 'Điểm Service'].find(h => headers.includes(h)) || 'KPI Service';
+            const finalKpiHeader = ['KPI', 'Điểm KPI', 'Tổng kết'].find(h => headers.includes(h)) || 'KPI';
 
             for (let r = startRowIndex; r < jsonData.length; r++) {
                 const row = jsonData[r];
@@ -219,10 +219,11 @@
                 const position = rowDataRaw['Vị trí'] ? rowDataRaw['Vị trí'].toString() : 'Kỹ thuật';
                 const scName = rowDataRaw['SC Name'] ? rowDataRaw['SC Name'].toString() : 'Không rõ';
 
+                // Phân loại nhóm Leader chuẩn xác (sửa lỗi kiểm tra undefined cũ)
                 let group = 'Staff';
                 if (position.includes('Trưởng trạm') || position.includes('Quản lý') || position.includes('Leader') || name.includes('Trưởng')) {
                     group = 'Leader';
-                } else if (rowDataRaw['KPI Vận hành'] !== null && rowDataRaw['KPI Kho'] !== null && rowDataRaw['Năng suất'] === undefined) {
+                } else if (rowDataRaw[opsHeader] !== null && rowDataRaw[whHeader] !== null && (rowDataRaw['Năng suất'] === null || rowDataRaw['Năng suất'] === 0)) {
                     group = 'Leader';
                 }
 
@@ -237,8 +238,8 @@
                 };
 
                 let saleDataObj = { num: 0, isRed: false, hasData: false };
-                if (row[34] !== undefined && row[34] !== null && row[34] !== '-') {
-                    const rawSaleScore = parseFloat(row[34]) || 0;
+                if (row[saleColumnIndex] !== undefined && row[saleColumnIndex] !== null && row[saleColumnIndex] !== '-') {
+                    const rawSaleScore = parseFloat(row[saleColumnIndex]) || 0;
                     const calculatedSalePercent = (rawSaleScore / 15) * 100;
                     
                     let isSaleRed = calculatedSalePercent < refSalePercent;
@@ -263,10 +264,10 @@
                     rcpSst: extractAndCompare('Reception SST'),
                     roCheck: extractAndCompare('RO Quality'),
                     kpiSale: saleDataObj,
-                    kpiWh: extractAndCompare('Tổng hợp chỉ số kho') || extractAndCompare('Điểm Kho') || extractAndCompare('KPI Kho'),
-                    kpiOps: extractAndCompare('KPI Vận hành') || extractAndCompare('Điểm vận hành'),
-                    kpiService: extractAndCompare('KPI Service') || extractAndCompare('Tổng hợp'),
-                    finalKpi: extractAndCompare('KPI'),
+                    kpiWh: extractAndCompare(whHeader),
+                    kpiOps: extractAndCompare(opsHeader),
+                    kpiService: extractAndCompare(serviceHeader),
+                    finalKpi: extractAndCompare(finalKpiHeader),
                     originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
                 };
             }
@@ -332,9 +333,11 @@
             const staff = rawExcelData[currentGroup][selectedName];
             document.getElementById('lbl-sc').innerText = staff.scName;
 
-            let displayKpiPercent = staff.finalKpi.num > 0 ? staff.finalKpi.num : 0;
-            if (displayKpiPercent === 0) {
-                displayKpiPercent = currentGroup === 'Leader' ? (staff.kpiOps.num + staff.kpiWh.num) / 2 : staff.kpiService.num;
+            let displayKpiPercent = staff.finalKpi.hasData ? staff.finalKpi.num : 0;
+            if (!staff.finalKpi.hasData) {
+                const opsNum = staff.kpiOps.hasData ? staff.kpiOps.num : 0;
+                const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
+                displayKpiPercent = currentGroup === 'Leader' ? (opsNum + whNum) / 2 : (staff.kpiService.hasData ? staff.kpiService.num : 0);
             }
             document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
 
@@ -431,6 +434,7 @@
             }
         }
 
+        // Đồng bộ ẩn/hiện cột thông minh dựa trên dữ liệu hiện có của nhân sự
         function toggleRow(rowId, condition) {
             const el = document.getElementById(rowId);
             if (condition) el.classList.remove('hidden');
