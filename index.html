@@ -1,0 +1,511 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OPPO Service Center Smart KPI Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+</head>
+<body class="bg-slate-900 text-slate-100 font-sans pb-12">
+
+    <header class="bg-slate-950 shadow-lg sticky top-0 z-50 border-b border-slate-800">
+        <div class="max-w-7xl mx-auto px-4 py-4 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-xl font-bold tracking-wide text-cyan-400">📊 OPPO SERVICE CENTER - DYNAMIC KPI DASHBOARD</h1>
+                <p class="text-xs text-slate-400 mt-0.5">Tự động giám sát KPI Sale & Cảnh báo trực quan chỉ số lỗi trên đồ thị Radar</p>
+            </div>
+            <div class="flex items-center gap-3 bg-slate-800 p-2 rounded-lg border border-slate-700">
+                <span class="text-sm font-medium text-slate-300">Tải DATA Source:</span>
+                <input type="file" id="upload-excel" accept=".xlsx, .xls, .csv" class="text-sm text-slate-400 file:mr-4 file:py-1 file:px-3 file:rounded-full file:border-0 file:text-xs file:font-semibold file:bg-cyan-600 file:text-white hover:file:bg-cyan-500 cursor-pointer"/>
+            </div>
+        </div>
+    </header>
+
+    <main class="max-w-7xl mx-auto px-4 mt-6">
+        
+        <div id="welcome-message" class="bg-slate-800 text-center p-16 rounded-2xl shadow-sm border border-slate-700 my-12">
+            <div class="text-6xl mb-4">📂</div>
+            <h2 class="text-xl font-bold text-slate-200">Đang chờ nạp tệp dữ liệu báo cáo</h2>
+            <p class="text-slate-400 mt-2 max-w-md mx-auto text-sm">Vui lòng tải lên file Excel dữ liệu. Hệ thống sẽ quét định dạng, tính toán mốc KPI Sale từ cột AI và đối chiếu thông minh với hàng mốc số 1.</p>
+        </div>
+
+        <div id="dashboard-content" class="hidden">
+            <div class="grid grid-cols-1 lg:grid-cols-12 gap-6">
+                
+                <div class="lg:col-span-5 flex flex-col gap-6">
+                    
+                    <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl">
+                        <h3 class="text-xs font-bold text-cyan-400 mb-4 uppercase tracking-widest">👤 Bộ lọc phân cấp nhân sự</h3>
+                        
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 uppercase mb-2">Phân loại nhóm chức vụ</label>
+                                <div class="grid grid-cols-2 gap-2">
+                                    <button id="btn-group-leader" onclick="switchGroup('Leader')" class="py-2.5 px-3 rounded-xl font-medium text-xs border transition-all text-center bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600">
+                                        💼 LEADER / QUẢN LÝ
+                                    </button>
+                                    <button id="btn-group-staff" onclick="switchGroup('Staff')" class="py-2.5 px-3 rounded-xl font-medium text-xs border transition-all text-center bg-slate-700 border-slate-600 text-slate-300 hover:bg-slate-600">
+                                        🛠️ KỸ THUẬT / TIẾP TÂN / PG
+                                    </button>
+                                </div>
+                            </div>
+
+                            <div>
+                                <label class="block text-xs font-semibold text-slate-400 uppercase mb-1">Chọn cá nhân cụ thể</label>
+                                <select id="select-person" onchange="renderIndividualKPI()" class="w-full bg-slate-900 border border-slate-700 text-slate-200 text-sm rounded-xl focus:ring-cyan-500 focus:border-cyan-500 block p-2.5">
+                                    <option value="">-- Danh sách nhân sự --</option>
+                                </select>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="bg-slate-800 p-5 rounded-2xl border border-slate-700 shadow-xl flex-1">
+                        <h3 class="text-xs font-bold text-cyan-400 mb-4 uppercase tracking-widest">🏆 CHI TIẾT CÁC CHỈ SỐ KPI CHÍNH</h3>
+                        
+                        <div class="space-y-4">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-slate-900 p-3 rounded-xl text-center border border-slate-800 flex flex-col justify-center">
+                                    <span class="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Xếp Loại</span>
+                                    <div id="kpi-grade" class="text-lg font-black mt-1 text-slate-500">- -</div>
+                                </div>
+                                <div class="bg-slate-900 p-3 rounded-xl border border-slate-800 text-center">
+                                    <span class="text-[10px] font-bold text-slate-400 block uppercase tracking-wider">KPI Tổng Kết</span>
+                                    <span id="kpi-percent" class="text-2xl font-black text-cyan-400">-%</span>
+                                </div>
+                            </div>
+
+                            <div class="border-t border-slate-700/50 pt-3 space-y-2.5 text-xs">
+                                <div id="container-sc" class="flex justify-between border-b border-slate-700/30 pb-1.5"><span class="text-slate-400">🏢 Trung tâm:</span><span id="lbl-sc" class="font-semibold text-slate-200">-</span></div>
+                                
+                                <div id="row-productivity" class="flex justify-between hidden"><span class="text-slate-400">⚡ Năng suất sản lượng:</span><span id="lbl-productivity" class="font-semibold">-</span></div>
+                                <div id="row-nps" class="flex justify-between hidden"><span class="text-slate-400">❤️ Chỉ số NPS cá nhân:</span><span id="lbl-nps" class="font-semibold">-</span></div>
+                                <div id="row-tat" class="flex justify-between hidden"><span class="text-slate-400">⏱️ Chỉ số TAT xử lý:</span><span id="lbl-tat" class="font-semibold">-</span></div>
+                                <div id="row-tech-sst" class="flex justify-between hidden"><span class="text-slate-400">🛠️ Chỉ số SST Kỹ thuật:</span><span id="lbl-tech-sst" class="font-semibold">-</span></div>
+                                <div id="row-rcp-sst" class="flex justify-between hidden"><span class="text-slate-400">🛎️ Chỉ số SST Tiếp tân:</span><span id="lbl-rcp-sst" class="font-semibold">-</span></div>
+                                <div id="row-ro" class="flex justify-between hidden"><span class="text-slate-400">📋 Chỉ số RO Quality / Check:</span><span id="lbl-ro" class="font-semibold">-</span></div>
+                                
+                                <div id="row-sale" class="flex justify-between hidden"><span class="text-slate-400">🛍️ Chỉ số KPI Sale :</span><span id="lbl-sale" class="font-semibold">-</span></div>
+                                
+                                <div id="row-wh" class="flex justify-between hidden"><span class="text-slate-400">📦 Chỉ số KPI Kho:</span><span id="lbl-wh" class="font-semibold">-</span></div>
+                                <div id="row-ops" class="flex justify-between hidden"><span class="text-slate-400">📈 Chỉ số KPI Vận Hành:</span><span id="lbl-ops" class="font-semibold">-</span></div>
+                                <div id="row-service" class="flex justify-between hidden pt-1 border-t border-slate-700/40"><span class="text-slate-400 font-medium">🎯 Điểm tổng hợp KPI Service:</span><span id="lbl-service" class="font-bold">-</span></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="lg:col-span-7 bg-slate-800 p-6 rounded-2xl border border-slate-700 shadow-xl flex flex-col justify-between">
+                    <div>
+                        <h3 class="text-xs font-bold text-cyan-400 uppercase tracking-widest">🕸️ ĐỒ THỊ RADAR NĂNG LỰC</h3>
+                        <p class="text-xs text-slate-400 mt-1">Các chỉ số không đạt yêu cầu sẽ chuyển sang nhãn chữ Đỏ và điểm thắt Kim Cương Đỏ.</p>
+                    </div>
+                    
+                    <div class="relative w-full h-[460px] flex justify-center items-center my-4">
+                        <canvas id="kpi-radar-chart"></canvas>
+                    </div>
+                    
+                    <div class="bg-slate-900/50 border border-slate-700 p-3 rounded-xl text-[11px] text-slate-400 leading-relaxed">
+                        <strong>💡 Quy chuẩn tính KPI:</strong> Dựa vào bản chính sách KPI Service 2026
+                    </div>
+                </div>
+
+            </div>
+        </div>
+    </main>
+
+    <script>
+        let rawExcelData = { Leader: {}, Staff: {} };
+        let currentGroup = 'Staff';
+        let radarChartInstance = null;
+
+        // 1. Tiếp nhận và xử lý tệp tin Excel nạp lên
+        document.getElementById('upload-excel').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+                const jsonData = XLSX.utils.sheet_to_json(worksheet, { header: 1 });
+                
+                let headerIndex = 0;
+                for (let i = 0; i < jsonData.length; i++) {
+                    if (jsonData[i] && (jsonData[i].includes('SC Code') || jsonData[i].includes('Nhân viên'))) {
+                        headerIndex = i;
+                        break;
+                    }
+                }
+
+                const headers = jsonData[headerIndex];
+                const referenceRow = jsonData[0] || [];
+
+                processOPPODataAdvanced(jsonData, headers, headerIndex + 1, referenceRow);
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        // Chuyển đổi định dạng chuỗi thô thành dữ liệu số phần trăm hợp lệ
+        function parseToNumericValue(val) {
+            if (val === undefined || val === null || val === '-' || val === '') return null;
+            let n = parseFloat(val);
+            if (isNaN(n)) return null;
+            if (n > 0 && n <= 1) n = n * 100;
+            return n;
+        }
+
+        // 2. Phân tích dữ liệu nâng cao dựa trên Ma trận cấu trúc tệp
+        function processOPPODataAdvanced(jsonData, headers, startRowIndex, referenceRow) {
+            rawExcelData = { Leader: {}, Staff: {} };
+            
+            let referenceMap = {};
+            headers.forEach((header, index) => {
+                if (header) {
+                    referenceMap[header] = parseToNumericValue(referenceRow[index]);
+                }
+            });
+
+            // Lấy điểm mốc Sale tại cột AI (index 34) của hàng 1 làm chuẩn so sánh
+            const rawRefSale = referenceRow[34] !== undefined ? parseFloat(referenceRow[34]) : 15;
+            const refSalePercent = (rawRefSale / 15) * 100; 
+
+            for (let r = startRowIndex; r < jsonData.length; r++) {
+                const row = jsonData[r];
+                if (!row || row.length === 0) continue;
+
+                let rowDataRaw = {};
+                headers.forEach((header, cIndex) => {
+                    rowDataRaw[header] = row[cIndex] !== undefined ? row[cIndex] : null;
+                });
+
+                const nameVal = rowDataRaw['Nhân viên'];
+                if (!nameVal || nameVal === '-' || nameVal.toString().includes('năng suất')) continue;
+
+                const name = nameVal.toString().trim();
+                const position = rowDataRaw['Vị trí'] ? rowDataRaw['Vị trí'].toString() : 'Kỹ thuật';
+                const scName = rowDataRaw['SC Name'] ? rowDataRaw['SC Name'].toString() : 'Không rõ';
+
+                // Phân bổ nhóm chức vụ
+                let group = 'Staff';
+                if (position.includes('Trưởng trạm') || position.includes('Quản lý') || position.includes('Leader') || name.includes('Trưởng')) {
+                    group = 'Leader';
+                } else if (rowDataRaw['KPI Vận hành'] !== null && rowDataRaw['KPI Kho'] !== null && rowDataRaw['Năng suất'] === undefined) {
+                    group = 'Leader';
+                }
+
+                // Hàm so sánh giá trị nhân viên với mốc chuẩn hàng 1
+                const extractAndCompare = (columnName) => {
+                    const currentVal = parseToNumericValue(rowDataRaw[columnName]);
+                    const refVal = referenceMap[columnName];
+                    if (currentVal === null) return { num: 0, isRed: false, hasData: false };
+                    
+                    let shouldBeRed = false;
+                    if (refVal !== null && currentVal < refVal) shouldBeRed = true;
+                    return { num: currentVal, isRed: shouldBeRed, hasData: true };
+                };
+
+                // Trích xuất KPI Sale bằng thuật toán quy chuẩn (Cột AI / vị trí số 34 chia cho 15)
+                let saleDataObj = { num: 0, isRed: false, hasData: false };
+                if (row[34] !== undefined && row[34] !== null && row[34] !== '-') {
+                    const rawSaleScore = parseFloat(row[34]) || 0;
+                    const calculatedSalePercent = (rawSaleScore / 15) * 100;
+                    
+                    let isSaleRed = calculatedSalePercent < refSalePercent;
+                    saleDataObj = { num: calculatedSalePercent, isRed: isSaleRed, hasData: true };
+                }
+
+                const prodVal = rowDataRaw['Năng suất'] ? parseFloat(rowDataRaw['Năng suất']) : 0;
+                const refProd = referenceMap['Năng suất'] ? parseFloat(referenceMap['Năng suất']) : 0;
+
+                rawExcelData[group][name] = {
+                    name: name,
+                    scName: scName,
+                    position: position,
+                    productivity: { 
+                        num: prodVal, 
+                        isRed: (refProd > 0 && prodVal < refProd), 
+                        hasData: rowDataRaw['Năng suất'] !== undefined && rowDataRaw['Năng suất'] !== null 
+                    },
+                    nps: extractAndCompare('NPS SC/Cá nhân'),
+                    tat: extractAndCompare('TAT SC/ Cá nhân'),
+                    techSst: extractAndCompare('Technical SST'),
+                    rcpSst: extractAndCompare('Reception SST'),
+                    roCheck: extractAndCompare('RO Quality'),
+                    kpiSale: saleDataObj,
+                    kpiWh: extractAndCompare('Tổng hợp chỉ số kho') || extractAndCompare('Điểm Kho') || extractAndCompare('KPI Kho'),
+                    kpiOps: extractAndCompare('KPI Vận hành') || extractAndCompare('Điểm vận hành'),
+                    kpiService: extractAndCompare('KPI Service') || extractAndCompare('Tổng hợp'),
+                    finalKpi: extractAndCompare('KPI'),
+                    originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
+                };
+            }
+
+            document.getElementById('welcome-message').classList.add('hidden');
+            document.getElementById('dashboard-content').classList.remove('hidden');
+            switchGroup('Staff');
+        }
+
+        // 3. Chuyển đổi qua lại giữa nhóm Leader và Nhân viên
+        function switchGroup(group) {
+            currentGroup = group;
+            const btnLeader = document.getElementById('btn-group-leader');
+            const btnStaff = document.getElementById('btn-group-staff');
+
+            if(group === 'Leader') {
+                btnLeader.className = "py-2.5 px-3 rounded-xl font-medium text-xs border transition-all text-center bg-cyan-600 text-white border-cyan-600 shadow-lg";
+                btnStaff.className = "py-2.5 px-3 rounded-xl font-medium text-xs border transition-all text-center bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600";
+            } else {
+                btnStaff.className = "py-2.5 px-3 rounded-xl font-medium text-xs border transition-all text-center bg-cyan-600 text-white border-cyan-600 shadow-lg";
+                btnLeader.className = "py-2.5 px-3 rounded-xl font-medium text-xs border transition-all text-center bg-slate-700 text-slate-300 border-slate-600 hover:bg-slate-600";
+            }
+
+            const select = document.getElementById('select-person');
+            select.innerHTML = '<option value="">-- Chọn nhân sự cụ thể --</option>';
+
+            const sortedNames = Object.keys(rawExcelData[group]).sort();
+            sortedNames.forEach(name => {
+                const opt = document.createElement('option');
+                opt.value = name;
+                opt.innerText = `${name} (${rawExcelData[group][name].scName})`;
+                select.appendChild(opt);
+            });
+
+            resetDisplay();
+        }
+
+        // Định dạng màu sắc nhấp nháy đỏ cho văn bản nếu chỉ số bị dính cờ cảnh báo (isRed)
+        function formatAndDisplayMetric(elementId, metricObj, isRawCount = false) {
+            const el = document.getElementById(elementId);
+            if (isRawCount) {
+                el.innerText = `${metricObj.num} ca`;
+            } else {
+                el.innerText = metricObj.num.toFixed(1) + '%';
+            }
+
+            if (metricObj.isRed) {
+                el.className = "font-black text-rose-500 text-sm bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30 animate-pulse";
+            } else {
+                if (!isRawCount && metricObj.num >= 95.0) {
+                    el.className = "font-semibold text-emerald-400 px-2 py-0.5";
+                } else {
+                    el.className = "font-semibold text-cyan-400 px-2 py-0.5";
+                }
+            }
+        }
+
+        // 4. Kết xuất dữ liệu chi tiết và đẩy thông số vào cấu trúc Đồ thị Radar
+        function renderIndividualKPI() {
+            const selectedName = document.getElementById('select-person').value;
+            if (!selectedName) {
+                resetDisplay();
+                return;
+            }
+
+            const staff = rawExcelData[currentGroup][selectedName];
+            document.getElementById('lbl-sc').innerText = staff.scName;
+
+            let displayKpiPercent = staff.finalKpi.num > 0 ? staff.finalKpi.num : 0;
+            if (displayKpiPercent === 0) {
+                displayKpiPercent = currentGroup === 'Leader' ? (staff.kpiOps.num + staff.kpiWh.num) / 2 : staff.kpiService.num;
+            }
+            document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
+
+            let grade = staff.originalGrade;
+            let gradeColor = 'text-yellow-400';
+            if (grade === 'A') gradeColor = 'text-cyan-400';
+            else if (grade === 'B') gradeColor = 'text-emerald-400';
+            else if (grade === 'C') gradeColor = 'text-amber-500';
+            else if (grade === 'D') gradeColor = 'text-rose-500 animate-bounce';
+
+            const gradeEl = document.getElementById('kpi-grade');
+            gradeEl.innerText = `HẠNG ${grade}`;
+            gradeEl.className = `text-xl font-black tracking-wider ${gradeColor}`;
+
+            // Khởi tạo các mảng đồng bộ để truyền thông tin vẽ biểu đồ
+            let radarLabels = [];
+            let radarData = [];
+            let radarErrors = []; // Quản lý mốc lỗi để tô màu biểu đồ radar
+
+            // Năng suất sản lượng
+            toggleRow('row-productivity', staff.productivity.hasData);
+            if(staff.productivity.hasData) {
+                formatAndDisplayMetric('lbl-productivity', staff.productivity, true);
+            }
+
+            // Chỉ số NPS cá nhân
+            toggleRow('row-nps', staff.nps.hasData);
+            if(staff.nps.hasData) {
+                formatAndDisplayMetric('lbl-nps', staff.nps);
+                radarLabels.push('Chỉ số NPS');
+                radarData.push(staff.nps.num);
+                radarErrors.push(staff.nps.isRed);
+            }
+
+            // Chỉ số TAT xử lý
+            toggleRow('row-tat', staff.tat.hasData);
+            if(staff.tat.hasData) {
+                formatAndDisplayMetric('lbl-tat', staff.tat);
+                radarLabels.push('TAT xử lý');
+                radarData.push(staff.tat.num);
+                radarErrors.push(staff.tat.isRed);
+            }
+
+            // Chỉ số SST Kỹ thuật
+            toggleRow('row-tech-sst', staff.techSst.hasData);
+            if(staff.techSst.hasData) {
+                formatAndDisplayMetric('lbl-tech-sst', staff.techSst);
+                radarLabels.push('SST Kỹ thuật');
+                radarData.push(staff.techSst.num);
+                radarErrors.push(staff.techSst.isRed);
+            }
+
+            // Chỉ số SST Tiếp tân
+            toggleRow('row-rcp-sst', staff.rcpSst.hasData);
+            if(staff.rcpSst.hasData) {
+                formatAndDisplayMetric('lbl-rcp-sst', staff.rcpSst);
+                radarLabels.push('SST Tiếp tân');
+                radarData.push(staff.rcpSst.num);
+                radarErrors.push(staff.rcpSst.isRed);
+            }
+
+            // Chỉ số RO Quality / Check
+            toggleRow('row-ro', staff.roCheck.hasData);
+            if(staff.roCheck.hasData) {
+                formatAndDisplayMetric('lbl-ro', staff.roCheck);
+                radarLabels.push('RO Quality');
+                radarData.push(staff.roCheck.num);
+                radarErrors.push(staff.roCheck.isRed);
+            }
+
+            // Chỉ số KPI Sale
+            toggleRow('row-sale', staff.kpiSale.hasData);
+            if(staff.kpiSale.hasData) {
+                formatAndDisplayMetric('lbl-sale', staff.kpiSale);
+                radarLabels.push('KPI Sale');
+                radarData.push(staff.kpiSale.num);
+                radarErrors.push(staff.kpiSale.isRed);
+            }
+
+            // Chỉ số KPI Kho
+            toggleRow('row-wh', staff.kpiWh.hasData);
+            if(staff.kpiWh.hasData) {
+                formatAndDisplayMetric('lbl-wh', staff.kpiWh);
+                radarLabels.push('KPI Kho');
+                radarData.push(staff.kpiWh.num);
+                radarErrors.push(staff.kpiWh.isRed);
+            }
+
+            // Chỉ số KPI Vận Hành
+            toggleRow('row-ops', staff.kpiOps.hasData);
+            if(staff.kpiOps.hasData) {
+                formatAndDisplayMetric('lbl-ops', staff.kpiOps);
+            }
+
+            // Điểm tổng hợp KPI Service
+            toggleRow('row-service', staff.kpiService.hasData);
+            if(staff.kpiService.hasData) {
+                formatAndDisplayMetric('lbl-service', staff.kpiService);
+            }
+
+            // Kích hoạt vẽ biểu đồ mạng nhện nếu phát hiện có dữ liệu thành phần
+            if (radarLabels.length > 0) {
+                buildRadarChart(selectedName, radarLabels, radarData, radarErrors);
+            } else {
+                if (radarChartInstance) radarChartInstance.destroy();
+            }
+        }
+
+        function toggleRow(rowId, condition) {
+            const el = document.getElementById(rowId);
+            if (condition) el.classList.remove('hidden');
+            else el.classList.add('hidden');
+        }
+
+        // 5. Khởi tạo cấu trúc biểu đồ Radar - Tự động tô màu cảnh báo chỉ số lỗi
+        function buildRadarChart(name, labels, points, errors) {
+            if (radarChartInstance) radarChartInstance.destroy();
+
+            // Ánh xạ mảng màu sắc và kiểu dáng cho điểm nút để làm nổi bật phần không đạt yêu cầu
+            const pointColors = errors.map(isRed => isRed ? 'rgba(244, 63, 94, 1)' : 'rgba(6, 182, 212, 1)'); 
+            const pointSizes = errors.map(isRed => isRed ? 8 : 4); 
+            const pointStyles = errors.map(isRed => isRed ? 'rectRot' : 'circle'); 
+
+            const ctx = document.getElementById('kpi-radar-chart').getContext('2d');
+            radarChartInstance = new Chart(ctx, {
+                type: 'radar',
+                data: {
+                    labels: labels,
+                    datasets: [{
+                        label: `Bản đồ năng lực: ${name}`,
+                        data: points,
+                        backgroundColor: 'rgba(6, 182, 212, 0.08)',
+                        borderColor: 'rgba(6, 182, 212, 0.8)',
+                        
+                        // Áp dụng mảng cấu hình động
+                        pointBackgroundColor: pointColors,
+                        pointBorderColor: pointColors,
+                        pointRadius: pointSizes,
+                        pointStyle: pointStyles,
+                        
+                        pointHoverRadius: 10,
+                        pointHoverBackgroundColor: '#fff',
+                        pointHoverBorderColor: 'rgba(244, 63, 94, 1)'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            grid: { color: 'rgba(255, 255, 255, 0.08)' },
+                            angleLines: { color: 'rgba(255, 255, 255, 0.08)' },
+                            pointLabels: { 
+                                // Đổi chữ nhãn tiêu đề trục sang Màu đỏ nếu chỉ số đó bị đánh giá yếu kém
+                                color: function(context) {
+                                    const index = context.index;
+                                    return errors[index] ? '#f43f5e' : '#94a3b8'; 
+                                },
+                                font: function(context) {
+                                    const index = context.index;
+                                    return { 
+                                        size: errors[index] ? 12 : 11, 
+                                        weight: 'bold' 
+                                    };
+                                }
+                            },
+                            suggestedMin: 0,
+                            suggestedMax: 100,
+                            ticks: { 
+                                backdropColor: 'transparent', 
+                                color: '#64748b', 
+                                stepSize: 20,
+                                callback: function(value) { return value + '%'; }
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: { labels: { color: '#f8fafc', font: { size: 12 } } }
+                    }
+                }
+            });
+        }
+
+        // Khôi phục giao diện về trạng thái ban đầu khi đổi bộ lọc nhân sự
+        function resetDisplay() {
+            document.getElementById('lbl-sc').innerText = '-';
+            document.getElementById('kpi-percent').innerText = '-%';
+            const gradeEl = document.getElementById('kpi-grade');
+            gradeEl.innerText = '- -';
+            gradeEl.className = 'text-xl font-black text-slate-500';
+            
+            const rows = ['row-productivity', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-ops', 'row-service'];
+            rows.forEach(r => document.getElementById(r).classList.add('hidden'));
+
+            if (radarChartInstance) radarChartInstance.destroy();
+        }
+    </script>
+</body>
+</html>
