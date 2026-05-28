@@ -186,12 +186,13 @@
                 }
             });
 
-            // Tự động tìm kiếm cột Bán máy dựa trên tiêu đề
+            // Tìm vị trí cột Bán máy
             let deviceSalesColumnIndex = headers.findIndex(h => h && ['bán máy', 'cột bán máy', 'sản lượng bán máy', 'device sales'].includes(h.toString().toLowerCase().trim()));
             if (deviceSalesColumnIndex === -1) {
                 deviceSalesColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('bán máy'));
             }
 
+            // Tìm vị trí cột KPI Sale
             let saleColumnIndex = headers.findIndex(h => h && h.toString().trim() === 'KPI Sale');
             if (saleColumnIndex === -1) {
                 saleColumnIndex = headers.findIndex(h => h && ['điểm sale', 'chỉ số sale', 'sale score'].includes(h.toString().toLowerCase().trim()));
@@ -209,7 +210,9 @@
 
             const whHeader = ['Tổng hợp chỉ số kho', 'Điểm Kho', 'KPI Kho', 'Chỉ số kho'].find(h => headers.includes(h)) || 'KPI Kho';
             const serviceHeader = 'KPI Service Tổng hợp';
-            const finalKpiHeader = ['KPI', 'Điểm KPI', 'Tổng kết'].find(h => headers.includes(h)) || 'KPI';
+            
+            // Xác định chính xác tên cột chứa KPI tổng kết thực tế trên Sheet
+            const finalKpiHeader = headers.find(h => h && ['kpi', 'điểm kpi', 'kpi tổng kết', 'tổng kết', 'final kpi', 'kpi final'].includes(h.toString().toLowerCase().trim())) || 'KPI';
 
             let serviceHeaderIndex = headers.findIndex(h => h && h.toString().trim() === serviceHeader);
             let rawRefService = 15; 
@@ -267,7 +270,6 @@
                     saleDataObj = { num: calculatedSalePercent, isRed: isSaleRed, hasData: true };
                 }
 
-                // Xử lý riêng dữ liệu Sản lượng Bán máy
                 let deviceSalesVal = 0;
                 let hasDeviceSalesData = false;
                 if (deviceSalesColumnIndex !== -1 && row[deviceSalesColumnIndex] !== undefined && row[deviceSalesColumnIndex] !== null && row[deviceSalesColumnIndex] !== '-') {
@@ -289,7 +291,7 @@
                     },
                     deviceSales: {
                         num: deviceSalesVal,
-                        isRed: false, // Do đây là số đếm sản lượng gốc, mặc định không set cảnh báo đỏ
+                        isRed: false,
                         hasData: hasDeviceSalesData
                     },
                     nps: extractAndCompare('NPS SC/Cá nhân'),
@@ -300,7 +302,7 @@
                     kpiSale: saleDataObj,
                     kpiWh: extractAndCompare(whHeader),
                     kpiService: serviceDataObj, 
-                    finalKpi: extractAndCompare(finalKpiHeader),
+                    finalKpi: extractAndCompare(finalKpiHeader), // Lấy trực tiếp % KPI tổng kết thực tế từ cột này
                     originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
                 };
             }
@@ -370,15 +372,9 @@
             const staff = rawExcelData[currentGroup][selectedName];
             document.getElementById('lbl-sc').innerText = staff.scName;
 
-            const serviceNum = staff.kpiService.hasData ? staff.kpiService.num : 0;
-            const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
-            
-            let displayKpiPercent = serviceNum;
-            if (currentGroup === 'Leader' && staff.kpiWh.hasData) {
-                displayKpiPercent = (serviceNum + whNum) / 2; 
-            }
-            
-            document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
+            // Đã sửa đổi: Lấy chính xác giá trị KPI tổng kết từ thuộc tính finalKpi đã quét trên Sheet
+            const finalKpiPercent = staff.finalKpi.hasData ? staff.finalKpi.num : 0;
+            document.getElementById('kpi-percent').innerText = Math.round(finalKpiPercent) + '%';
 
             let grade = staff.originalGrade;
             let gradeColor = 'text-yellow-400';
@@ -400,7 +396,6 @@
                 formatAndDisplayMetric('lbl-productivity', staff.productivity, 'count');
             }
 
-            // Đưa chỉ số cột Bán máy hiển thị lên cho nhóm Leader
             toggleRow('row-device-sales', staff.deviceSales.hasData && currentGroup === 'Leader');
             if(staff.deviceSales.hasData && currentGroup === 'Leader') {
                 formatAndDisplayMetric('lbl-device-sales', staff.deviceSales, 'device');
