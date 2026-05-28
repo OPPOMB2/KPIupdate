@@ -91,10 +91,9 @@
                                 <div id="row-tech-sst" class="flex justify-between hidden"><span class="text-slate-400">🛠️ Chỉ số SST Kỹ thuật:</span><span id="lbl-tech-sst" class="font-semibold">-</span></div>
                                 <div id="row-rcp-sst" class="flex justify-between hidden"><span class="text-slate-400">🛎️ Chỉ số SST Tiếp tân:</span><span id="lbl-rcp-sst" class="font-semibold">-</span></div>
                                 <div id="row-ro" class="flex justify-between hidden"><span class="text-slate-400">📋 Chỉ số RO Quality / Check:</span><span id="lbl-ro" class="font-semibold">-</span></div>
-                                <div id="row-ops" class="flex justify-between hidden"><span class="text-slate-400">📈 Chỉ số KPI Vận Hành:</span><span id="lbl-ops" class="font-semibold">-</span></div>
-                                <div id="row-service" class="flex justify-between hidden pt-1 border-t border-slate-700/40"><span class="text-slate-400 font-medium">🎯 Điểm tổng hợp KPI Service:</span><span id="lbl-service" class="font-bold">-</span></div>
-                                <div id="row-sale" class="flex justify-between hidden"><span class="text-slate-400">🛍️ Chỉ số KPI Sale :</span><span id="lbl-sale" class="font-semibold">-</span></div>
+                                <div id="row-sale" class="flex justify-between hidden"><span class="text-slate-400">🛍️ Chỉ số KPI Sale:</span><span id="lbl-sale" class="font-semibold">-</span></div>
                                 <div id="row-wh" class="flex justify-between hidden"><span class="text-slate-400">📦 Chỉ số KPI Kho:</span><span id="lbl-wh" class="font-semibold">-</span></div>
+                                <div id="row-ops" class="flex justify-between hidden"><span class="text-slate-400">📈 Chỉ số KPI Vận Hành:</span><span id="lbl-ops" class="font-semibold">-</span></div>
                             </div>
                         </div>
                     </div>
@@ -187,21 +186,16 @@
                 }
             });
 
-            // THUẬT TOÁN TÌM CỘT SALE ĐÃ ĐƯỢC NÂNG CẤP ĐỂ TRÁNH NHẬN NHẦM CỘT PHỤ
             let saleColumnIndex = headers.findIndex(h => h && h.toString().trim() === 'KPI Sale');
             if (saleColumnIndex === -1) {
-                // Nếu không tìm thấy chính xác từ 'KPI Sale', tìm các từ khóa phụ sát nghĩa nhất
                 saleColumnIndex = headers.findIndex(h => h && ['điểm sale', 'chỉ số sale', 'sale score'].includes(h.toString().toLowerCase().trim()));
             }
             if (saleColumnIndex === -1) {
-                // Nếu vẫn không thấy, tìm kiếm tương đối có chứa cụm từ 'kpi sale'
                 saleColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('kpi sale'));
             }
             if (saleColumnIndex === -1) {
-                // Cực chẳng đã mới tìm kiếm chữ 'sale' chung chung
                 saleColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('sale'));
             }
-            // Khôi phục về cột gốc AI (Index 34) nếu trên file không đặt tên tiêu đề có chữ sale
             if (saleColumnIndex === -1) saleColumnIndex = 34;
 
             const rawRefSale = referenceRow[saleColumnIndex] !== undefined ? parseFloat(referenceRow[saleColumnIndex]) : 15;
@@ -209,7 +203,6 @@
 
             const whHeader = ['Tổng hợp chỉ số kho', 'Điểm Kho', 'KPI Kho', 'Chỉ số kho'].find(h => headers.includes(h)) || 'KPI Kho';
             const opsHeader = ['KPI Vận hành', 'Điểm vận hành', 'Vận hành'].find(h => headers.includes(h)) || 'KPI Vận hành';
-            const serviceHeader = ['KPI Service', 'Tổng hợp', 'Điểm Service'].find(h => headers.includes(h)) || 'KPI Service';
             const finalKpiHeader = ['KPI', 'Điểm KPI', 'Tổng kết'].find(h => headers.includes(h)) || 'KPI';
 
             for (let r = startRowIndex; r < jsonData.length; r++) {
@@ -274,7 +267,6 @@
                     kpiSale: saleDataObj,
                     kpiWh: extractAndCompare(whHeader),
                     kpiOps: extractAndCompare(opsHeader),
-                    kpiService: extractAndCompare(serviceHeader),
                     finalKpi: extractAndCompare(finalKpiHeader),
                     originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
                 };
@@ -345,7 +337,7 @@
             if (!staff.finalKpi.hasData) {
                 const opsNum = staff.kpiOps.hasData ? staff.kpiOps.num : 0;
                 const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
-                displayKpiPercent = currentGroup === 'Leader' ? (opsNum + whNum) / 2 : (staff.kpiService.hasData ? staff.kpiService.num : 0);
+                displayKpiPercent = currentGroup === 'Leader' ? (opsNum + whNum) / 2 : 0;
             }
             document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
 
@@ -428,11 +420,6 @@
             toggleRow('row-ops', staff.kpiOps.hasData);
             if(staff.kpiOps.hasData) {
                 formatAndDisplayMetric('lbl-ops', staff.kpiOps);
-            }
-
-            toggleRow('row-service', staff.kpiService.hasData);
-            if(staff.kpiService.hasData) {
-                formatAndDisplayMetric('lbl-service', staff.kpiService);
             }
 
             if (radarLabels.length > 0) {
@@ -520,7 +507,7 @@
             gradeEl.innerText = '- -';
             gradeEl.className = 'text-xl font-black text-slate-500';
             
-            const rows = ['row-productivity', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-ops', 'row-service'];
+            const rows = ['row-productivity', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-ops'];
             rows.forEach(r => document.getElementById(r).classList.add('hidden'));
 
             if (radarChartInstance) radarChartInstance.destroy();
