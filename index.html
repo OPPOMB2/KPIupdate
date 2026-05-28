@@ -85,6 +85,7 @@
                             <div class="border-t border-slate-700/50 pt-3 space-y-2.5 text-xs">
                                 <div id="container-sc" class="flex justify-between border-b border-slate-700/30 pb-1.5"><span class="text-slate-400">🏢 Trung tâm:</span><span id="lbl-sc" class="font-semibold text-slate-200">-</span></div>
                                 <div id="row-productivity" class="flex justify-between hidden"><span class="text-slate-400">⚡ Năng suất sản lượng:</span><span id="lbl-productivity" class="font-semibold">-</span></div>
+                                <div id="row-device-sales" class="flex justify-between hidden"><span class="text-slate-400 font-medium text-amber-400">🛍️ Sản lượng bán máy:</span><span id="lbl-device-sales" class="font-semibold">-</span></div>
                                 <div id="row-nps" class="flex justify-between hidden"><span class="text-slate-400">❤️ Chỉ số NPS cá nhân:</span><span id="lbl-nps" class="font-semibold">-</span></div>
                                 <div id="row-tat" class="flex justify-between hidden"><span class="text-slate-400">⏱️ Chỉ số TAT xử lý:</span><span id="lbl-tat" class="font-semibold">-</span></div>
                                 <div id="row-tech-sst" class="flex justify-between hidden"><span class="text-slate-400">🛠️ Chỉ số SST Kỹ thuật:</span><span id="lbl-tech-sst" class="font-semibold">-</span></div>
@@ -185,6 +186,12 @@
                 }
             });
 
+            // Tự động tìm kiếm cột Bán máy dựa trên tiêu đề
+            let deviceSalesColumnIndex = headers.findIndex(h => h && ['bán máy', 'cột bán máy', 'sản lượng bán máy', 'device sales'].includes(h.toString().toLowerCase().trim()));
+            if (deviceSalesColumnIndex === -1) {
+                deviceSalesColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('bán máy'));
+            }
+
             let saleColumnIndex = headers.findIndex(h => h && h.toString().trim() === 'KPI Sale');
             if (saleColumnIndex === -1) {
                 saleColumnIndex = headers.findIndex(h => h && ['điểm sale', 'chỉ số sale', 'sale score'].includes(h.toString().toLowerCase().trim()));
@@ -204,9 +211,8 @@
             const serviceHeader = 'KPI Service Tổng hợp';
             const finalKpiHeader = ['KPI', 'Điểm KPI', 'Tổng kết'].find(h => headers.includes(h)) || 'KPI';
 
-            // Lấy điểm chỉ tiêu gốc của KPI Service Tổng hợp từ dòng 1
             let serviceHeaderIndex = headers.findIndex(h => h && h.toString().trim() === serviceHeader);
-            let rawRefService = 15; // Mặc định chỉ tiêu chuẩn là 15 điểm
+            let rawRefService = 15; 
             if (serviceHeaderIndex !== -1 && referenceRow[serviceHeaderIndex] !== undefined) {
                 let parsedRef = parseFloat(referenceRow[serviceHeaderIndex]);
                 if (!isNaN(parsedRef) && parsedRef > 0) rawRefService = parsedRef;
@@ -245,13 +251,10 @@
                     return { num: currentVal, isRed: shouldBeRed, hasData: true };
                 };
 
-                // Xử lý riêng biệt cột KPI Service Tổng hợp: Chia cho 15 để quy đổi ra phần trăm %
                 let serviceDataObj = { num: 0, isRed: false, hasData: false };
                 if (serviceHeaderIndex !== -1 && row[serviceHeaderIndex] !== undefined && row[serviceHeaderIndex] !== null && row[serviceHeaderIndex] !== '-') {
                     const rawServiceScore = parseFloat(row[serviceHeaderIndex]) || 0;
-                    // Chia kết quả cho 15 và nhân với 100 để tạo tỉ lệ phần trăm chính xác
                     const calculatedServicePercent = (rawServiceScore / 15) * 100;
-                    
                     let isServiceRed = rawServiceScore < rawRefService;
                     serviceDataObj = { num: calculatedServicePercent, isRed: isServiceRed, hasData: true };
                 }
@@ -260,9 +263,16 @@
                 if (row[saleColumnIndex] !== undefined && row[saleColumnIndex] !== null && row[saleColumnIndex] !== '-') {
                     const rawSaleScore = parseFloat(row[saleColumnIndex]) || 0;
                     const calculatedSalePercent = (rawSaleScore / 15) * 100;
-                    
                     let isSaleRed = calculatedSalePercent < refSalePercent;
                     saleDataObj = { num: calculatedSalePercent, isRed: isSaleRed, hasData: true };
+                }
+
+                // Xử lý riêng dữ liệu Sản lượng Bán máy
+                let deviceSalesVal = 0;
+                let hasDeviceSalesData = false;
+                if (deviceSalesColumnIndex !== -1 && row[deviceSalesColumnIndex] !== undefined && row[deviceSalesColumnIndex] !== null && row[deviceSalesColumnIndex] !== '-') {
+                    deviceSalesVal = parseFloat(row[deviceSalesColumnIndex]) || 0;
+                    hasDeviceSalesData = true;
                 }
 
                 const prodVal = rowDataRaw['Năng suất'] ? parseFloat(rowDataRaw['Năng suất']) : 0;
@@ -277,6 +287,11 @@
                         isRed: (refProd > 0 && prodVal < refProd), 
                         hasData: rowDataRaw['Năng suất'] !== undefined && rowDataRaw['Năng suất'] !== null 
                     },
+                    deviceSales: {
+                        num: deviceSalesVal,
+                        isRed: false, // Do đây là số đếm sản lượng gốc, mặc định không set cảnh báo đỏ
+                        hasData: hasDeviceSalesData
+                    },
                     nps: extractAndCompare('NPS SC/Cá nhân'),
                     tat: extractAndCompare('TAT SC/ Cá nhân'),
                     techSst: extractAndCompare('Technical SST'),
@@ -284,7 +299,7 @@
                     roCheck: extractAndCompare('RO Quality'),
                     kpiSale: saleDataObj,
                     kpiWh: extractAndCompare(whHeader),
-                    kpiService: serviceDataObj, // Sử dụng Object dữ liệu đã quy đổi hệ số 15
+                    kpiService: serviceDataObj, 
                     finalKpi: extractAndCompare(finalKpiHeader),
                     originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
                 };
@@ -322,10 +337,12 @@
             resetDisplay();
         }
 
-        function formatAndDisplayMetric(elementId, metricObj, isRawCount = false) {
+        function formatAndDisplayMetric(elementId, metricObj, unitType = 'percent') {
             const el = document.getElementById(elementId);
-            if (isRawCount) {
+            if (unitType === 'count') {
                 el.innerText = `${metricObj.num} ca`;
+            } else if (unitType === 'device') {
+                el.innerText = `${metricObj.num} máy`;
             } else {
                 el.innerText = metricObj.num.toFixed(1) + '%';
             }
@@ -333,8 +350,10 @@
             if (metricObj.isRed) {
                 el.className = "font-black text-rose-500 text-sm bg-rose-500/10 px-2 py-0.5 rounded border border-rose-500/30 animate-pulse";
             } else {
-                if (!isRawCount && metricObj.num >= 95.0) {
+                if (unitType === 'percent' && metricObj.num >= 95.0) {
                     el.className = "font-semibold text-emerald-400 px-2 py-0.5";
+                } else if (unitType === 'device') {
+                    el.className = "font-semibold text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20";
                 } else {
                     el.className = "font-semibold text-cyan-400 px-2 py-0.5";
                 }
@@ -351,13 +370,12 @@
             const staff = rawExcelData[currentGroup][selectedName];
             document.getElementById('lbl-sc').innerText = staff.scName;
 
-            // LUÔN LUÔN ƯU TIÊN LẤY DỮ LIỆU TỪ KPI SERVICE TỔNG HỢP ĐỂ LÀM KPI TỔNG KẾT
             const serviceNum = staff.kpiService.hasData ? staff.kpiService.num : 0;
             const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
             
             let displayKpiPercent = serviceNum;
             if (currentGroup === 'Leader' && staff.kpiWh.hasData) {
-                displayKpiPercent = (serviceNum + whNum) / 2; // Đối với trưởng trạm thì chia trung bình với điểm Kho
+                displayKpiPercent = (serviceNum + whNum) / 2; 
             }
             
             document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
@@ -379,7 +397,13 @@
 
             toggleRow('row-productivity', staff.productivity.hasData);
             if(staff.productivity.hasData) {
-                formatAndDisplayMetric('lbl-productivity', staff.productivity, true);
+                formatAndDisplayMetric('lbl-productivity', staff.productivity, 'count');
+            }
+
+            // Đưa chỉ số cột Bán máy hiển thị lên cho nhóm Leader
+            toggleRow('row-device-sales', staff.deviceSales.hasData && currentGroup === 'Leader');
+            if(staff.deviceSales.hasData && currentGroup === 'Leader') {
+                formatAndDisplayMetric('lbl-device-sales', staff.deviceSales, 'device');
             }
 
             toggleRow('row-service', staff.kpiService.hasData);
@@ -528,7 +552,7 @@
             gradeEl.innerText = '- -';
             gradeEl.className = 'text-xl font-black text-slate-500';
             
-            const rows = ['row-productivity', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-service'];
+            const rows = ['row-productivity', 'row-device-sales', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-service'];
             rows.forEach(r => document.getElementById(r).classList.add('hidden'));
 
             if (radarChartInstance) radarChartInstance.destroy();
