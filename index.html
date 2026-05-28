@@ -139,7 +139,6 @@
                 const response = await fetch(GOOGLE_SHEET_CSV_URL);
                 if (!response.ok) throw new Error('Mất kết nối mạng hoặc link sai');
                 
-                // Đọc dạng text trực tiếp để tối ưu hóa định dạng CSV trong SheetJS
                 const csvText = await response.text();
                 const workbook = XLSX.read(csvText, { type: 'string' });
                 
@@ -190,14 +189,26 @@
                 }
             });
 
-            // Tìm kiếm động cột Sale dựa trên tiêu đề thay vì gán cứng index 34
-            let saleColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('sale'));
+            // THUẬT TOÁN TÌM CỘT SALE ĐÃ ĐƯỢC NÂNG CẤP ĐỂ TRÁNH NHẬN NHẦM CỘT PHỤ
+            let saleColumnIndex = headers.findIndex(h => h && h.toString().trim() === 'KPI Sale');
+            if (saleColumnIndex === -1) {
+                // Nếu không tìm thấy chính xác từ 'KPI Sale', tìm các từ khóa phụ sát nghĩa nhất
+                saleColumnIndex = headers.findIndex(h => h && ['điểm sale', 'chỉ số sale', 'sale score'].includes(h.toString().toLowerCase().trim()));
+            }
+            if (saleColumnIndex === -1) {
+                // Nếu vẫn không thấy, tìm kiếm tương đối có chứa cụm từ 'kpi sale'
+                saleColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('kpi sale'));
+            }
+            if (saleColumnIndex === -1) {
+                // Cực chẳng đã mới tìm kiếm chữ 'sale' chung chung
+                saleColumnIndex = headers.findIndex(h => h && h.toString().toLowerCase().includes('sale'));
+            }
+            // Khôi phục về cột gốc AI (Index 34) nếu trên file không đặt tên tiêu đề có chữ sale
             if (saleColumnIndex === -1) saleColumnIndex = 34;
 
             const rawRefSale = referenceRow[saleColumnIndex] !== undefined ? parseFloat(referenceRow[saleColumnIndex]) : 15;
             const refSalePercent = rawRefSale > 0 ? (rawRefSale / 15) * 100 : 100; 
 
-            // Định danh động các nhóm tiêu đề để tránh lỗi Object luôn Truthy khi dùng toán tử || ngắn mạch
             const whHeader = ['Tổng hợp chỉ số kho', 'Điểm Kho', 'KPI Kho', 'Chỉ số kho'].find(h => headers.includes(h)) || 'KPI Kho';
             const opsHeader = ['KPI Vận hành', 'Điểm vận hành', 'Vận hành'].find(h => headers.includes(h)) || 'KPI Vận hành';
             const serviceHeader = ['KPI Service', 'Tổng hợp', 'Điểm Service'].find(h => headers.includes(h)) || 'KPI Service';
@@ -219,7 +230,6 @@
                 const position = rowDataRaw['Vị trí'] ? rowDataRaw['Vị trí'].toString() : 'Kỹ thuật';
                 const scName = rowDataRaw['SC Name'] ? rowDataRaw['SC Name'].toString() : 'Không rõ';
 
-                // Phân loại nhóm Leader chuẩn xác (sửa lỗi kiểm tra undefined cũ)
                 let group = 'Staff';
                 if (position.includes('Trưởng trạm') || position.includes('Quản lý') || position.includes('Leader') || name.includes('Trưởng')) {
                     group = 'Leader';
@@ -434,7 +444,6 @@
             }
         }
 
-        // Đồng bộ ẩn/hiện cột thông minh dựa trên dữ liệu hiện có của nhân sự
         function toggleRow(rowId, condition) {
             const el = document.getElementById(rowId);
             if (condition) el.classList.remove('hidden');
