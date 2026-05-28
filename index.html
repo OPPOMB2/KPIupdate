@@ -84,16 +84,15 @@
 
                             <div class="border-t border-slate-700/50 pt-3 space-y-2.5 text-xs">
                                 <div id="container-sc" class="flex justify-between border-b border-slate-700/30 pb-1.5"><span class="text-slate-400">🏢 Trung tâm:</span><span id="lbl-sc" class="font-semibold text-slate-200">-</span></div>
-                                
                                 <div id="row-productivity" class="flex justify-between hidden"><span class="text-slate-400">⚡ Năng suất sản lượng:</span><span id="lbl-productivity" class="font-semibold">-</span></div>
                                 <div id="row-nps" class="flex justify-between hidden"><span class="text-slate-400">❤️ Chỉ số NPS cá nhân:</span><span id="lbl-nps" class="font-semibold">-</span></div>
                                 <div id="row-tat" class="flex justify-between hidden"><span class="text-slate-400">⏱️ Chỉ số TAT xử lý:</span><span id="lbl-tat" class="font-semibold">-</span></div>
                                 <div id="row-tech-sst" class="flex justify-between hidden"><span class="text-slate-400">🛠️ Chỉ số SST Kỹ thuật:</span><span id="lbl-tech-sst" class="font-semibold">-</span></div>
                                 <div id="row-rcp-sst" class="flex justify-between hidden"><span class="text-slate-400">🛎️ Chỉ số SST Tiếp tân:</span><span id="lbl-rcp-sst" class="font-semibold">-</span></div>
                                 <div id="row-ro" class="flex justify-between hidden"><span class="text-slate-400">📋 Chỉ số RO Quality / Check:</span><span id="lbl-ro" class="font-semibold">-</span></div>
+                                <div id="row-service" class="flex justify-between hidden"><span class="text-slate-400">🎯 KPI Service Tổng hợp:</span><span id="lbl-service" class="font-semibold">-</span></div>
                                 <div id="row-sale" class="flex justify-between hidden"><span class="text-slate-400">🛍️ Chỉ số KPI Sale:</span><span id="lbl-sale" class="font-semibold">-</span></div>
                                 <div id="row-wh" class="flex justify-between hidden"><span class="text-slate-400">📦 Chỉ số KPI Kho:</span><span id="lbl-wh" class="font-semibold">-</span></div>
-                                <div id="row-ops" class="flex justify-between hidden"><span class="text-slate-400">📈 Chỉ số KPI Vận Hành:</span><span id="lbl-ops" class="font-semibold">-</span></div>
                             </div>
                         </div>
                     </div>
@@ -202,7 +201,7 @@
             const refSalePercent = rawRefSale > 0 ? (rawRefSale / 15) * 100 : 100; 
 
             const whHeader = ['Tổng hợp chỉ số kho', 'Điểm Kho', 'KPI Kho', 'Chỉ số kho'].find(h => headers.includes(h)) || 'KPI Kho';
-            const opsHeader = ['KPI Vận hành', 'Điểm vận hành', 'Vận hành'].find(h => headers.includes(h)) || 'KPI Vận hành';
+            const serviceHeader = 'KPI Service Tổng hợp';
             const finalKpiHeader = ['KPI', 'Điểm KPI', 'Tổng kết'].find(h => headers.includes(h)) || 'KPI';
 
             for (let r = startRowIndex; r < jsonData.length; r++) {
@@ -224,7 +223,7 @@
                 let group = 'Staff';
                 if (position.includes('Trưởng trạm') || position.includes('Quản lý') || position.includes('Leader') || name.includes('Trưởng')) {
                     group = 'Leader';
-                } else if (rowDataRaw[opsHeader] !== null && rowDataRaw[whHeader] !== null && (rowDataRaw['Năng suất'] === null || rowDataRaw['Năng suất'] === 0)) {
+                } else if (rowDataRaw[serviceHeader] !== null && rowDataRaw[whHeader] !== null && (rowDataRaw['Năng suất'] === null || rowDataRaw['Năng suất'] === 0)) {
                     group = 'Leader';
                 }
 
@@ -266,7 +265,7 @@
                     roCheck: extractAndCompare('RO Quality'),
                     kpiSale: saleDataObj,
                     kpiWh: extractAndCompare(whHeader),
-                    kpiOps: extractAndCompare(opsHeader),
+                    kpiService: extractAndCompare(serviceHeader),
                     finalKpi: extractAndCompare(finalKpiHeader),
                     originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
                 };
@@ -335,9 +334,13 @@
 
             let displayKpiPercent = staff.finalKpi.hasData ? staff.finalKpi.num : 0;
             if (!staff.finalKpi.hasData) {
-                const opsNum = staff.kpiOps.hasData ? staff.kpiOps.num : 0;
+                const serviceNum = staff.kpiService.hasData ? staff.kpiService.num : 0;
                 const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
-                displayKpiPercent = currentGroup === 'Leader' ? (opsNum + whNum) / 2 : 0;
+                if (currentGroup === 'Leader') {
+                    displayKpiPercent = (serviceNum + whNum) / 2;
+                } else {
+                    displayKpiPercent = serviceNum;
+                }
             }
             document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
 
@@ -359,6 +362,11 @@
             toggleRow('row-productivity', staff.productivity.hasData);
             if(staff.productivity.hasData) {
                 formatAndDisplayMetric('lbl-productivity', staff.productivity, true);
+            }
+
+            toggleRow('row-service', staff.kpiService.hasData);
+            if(staff.kpiService.hasData) {
+                formatAndDisplayMetric('lbl-service', staff.kpiService);
             }
 
             toggleRow('row-nps', staff.nps.hasData);
@@ -415,11 +423,6 @@
                 radarLabels.push('KPI Kho');
                 radarData.push(staff.kpiWh.num);
                 radarErrors.push(staff.kpiWh.isRed);
-            }
-
-            toggleRow('row-ops', staff.kpiOps.hasData);
-            if(staff.kpiOps.hasData) {
-                formatAndDisplayMetric('lbl-ops', staff.kpiOps);
             }
 
             if (radarLabels.length > 0) {
@@ -507,7 +510,7 @@
             gradeEl.innerText = '- -';
             gradeEl.className = 'text-xl font-black text-slate-500';
             
-            const rows = ['row-productivity', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-ops'];
+            const rows = ['row-productivity', 'row-nps', 'row-tat', 'row-tech-sst', 'row-rcp-sst', 'row-ro', 'row-sale', 'row-wh', 'row-service'];
             rows.forEach(r => document.getElementById(r).classList.add('hidden'));
 
             if (radarChartInstance) radarChartInstance.destroy();
