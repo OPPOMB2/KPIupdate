@@ -84,13 +84,14 @@
 
                             <div class="border-t border-slate-700/50 pt-3 space-y-2.5 text-xs">
                                 <div id="container-sc" class="flex justify-between border-b border-slate-700/30 pb-1.5"><span class="text-slate-400">🏢 Trung tâm:</span><span id="lbl-sc" class="font-semibold text-slate-200">-</span></div>
+                                
+                                <div id="row-service" class="flex justify-between hidden"><span class="text-slate-400">🎯 KPI Service Tổng hợp:</span><span id="lbl-service" class="font-semibold">-</span></div>
                                 <div id="row-productivity" class="flex justify-between hidden"><span class="text-slate-400">⚡ Năng suất sản lượng:</span><span id="lbl-productivity" class="font-semibold">-</span></div>
                                 <div id="row-nps" class="flex justify-between hidden"><span class="text-slate-400">❤️ Chỉ số NPS cá nhân:</span><span id="lbl-nps" class="font-semibold">-</span></div>
                                 <div id="row-tat" class="flex justify-between hidden"><span class="text-slate-400">⏱️ Chỉ số TAT xử lý:</span><span id="lbl-tat" class="font-semibold">-</span></div>
                                 <div id="row-tech-sst" class="flex justify-between hidden"><span class="text-slate-400">🛠️ Chỉ số SST Kỹ thuật:</span><span id="lbl-tech-sst" class="font-semibold">-</span></div>
                                 <div id="row-rcp-sst" class="flex justify-between hidden"><span class="text-slate-400">🛎️ Chỉ số SST Tiếp tân:</span><span id="lbl-rcp-sst" class="font-semibold">-</span></div>
                                 <div id="row-ro" class="flex justify-between hidden"><span class="text-slate-400">📋 Chỉ số RO Quality / Check:</span><span id="lbl-ro" class="font-semibold">-</span></div>
-                                <div id="row-service" class="flex justify-between hidden"><span class="text-slate-400">🎯 KPI Service Tổng hợp:</span><span id="lbl-service" class="font-semibold">-</span></div>
                                 <div id="row-sale" class="flex justify-between hidden"><span class="text-slate-400">🛍️ Chỉ số KPI Sale:</span><span id="lbl-sale" class="font-semibold">-</span></div>
                                 <div id="row-wh" class="flex justify-between hidden"><span class="text-slate-400">📦 Chỉ số KPI Kho:</span><span id="lbl-wh" class="font-semibold">-</span></div>
                             </div>
@@ -204,6 +205,14 @@
             const serviceHeader = 'KPI Service Tổng hợp';
             const finalKpiHeader = ['KPI', 'Điểm KPI', 'Tổng kết'].find(h => headers.includes(h)) || 'KPI';
 
+            // Lấy điểm chỉ tiêu gốc của KPI Service Tổng hợp từ dòng 1
+            let serviceHeaderIndex = headers.findIndex(h => h && h.toString().trim() === serviceHeader);
+            let rawRefService = 15; // Mặc định chỉ tiêu chuẩn là 15 điểm
+            if (serviceHeaderIndex !== -1 && referenceRow[serviceHeaderIndex] !== undefined) {
+                let parsedRef = parseFloat(referenceRow[serviceHeaderIndex]);
+                if (!isNaN(parsedRef) && parsedRef > 0) rawRefService = parsedRef;
+            }
+
             for (let r = startRowIndex; r < jsonData.length; r++) {
                 const row = jsonData[r];
                 if (!row || row.length === 0) continue;
@@ -237,6 +246,17 @@
                     return { num: currentVal, isRed: shouldBeRed, hasData: true };
                 };
 
+                // Xử lý riêng biệt cột KPI Service Tổng hợp: Chia cho 15 để quy đổi ra phần trăm %
+                let serviceDataObj = { num: 0, isRed: false, hasData: false };
+                if (serviceHeaderIndex !== -1 && row[serviceHeaderIndex] !== undefined && row[serviceHeaderIndex] !== null && row[serviceHeaderIndex] !== '-') {
+                    const rawServiceScore = parseFloat(row[serviceHeaderIndex]) || 0;
+                    // Chia kết quả cho 15 và nhân với 100 để tạo tỉ lệ phần trăm chính xác
+                    const calculatedServicePercent = (rawServiceScore / 15) * 100;
+                    
+                    let isServiceRed = rawServiceScore < rawRefService;
+                    serviceDataObj = { num: calculatedServicePercent, isRed: isServiceRed, hasData: true };
+                }
+
                 let saleDataObj = { num: 0, isRed: false, hasData: false };
                 if (row[saleColumnIndex] !== undefined && row[saleColumnIndex] !== null && row[saleColumnIndex] !== '-') {
                     const rawSaleScore = parseFloat(row[saleColumnIndex]) || 0;
@@ -265,7 +285,7 @@
                     roCheck: extractAndCompare('RO Quality'),
                     kpiSale: saleDataObj,
                     kpiWh: extractAndCompare(whHeader),
-                    kpiService: extractAndCompare(serviceHeader),
+                    kpiService: serviceDataObj, // Sử dụng Object dữ liệu đã quy đổi hệ số 15
                     finalKpi: extractAndCompare(finalKpiHeader),
                     originalGrade: rowDataRaw['Xếp loại'] ? rowDataRaw['Xếp loại'].toString().trim() : 'C'
                 };
@@ -332,16 +352,15 @@
             const staff = rawExcelData[currentGroup][selectedName];
             document.getElementById('lbl-sc').innerText = staff.scName;
 
-            let displayKpiPercent = staff.finalKpi.hasData ? staff.finalKpi.num : 0;
-            if (!staff.finalKpi.hasData) {
-                const serviceNum = staff.kpiService.hasData ? staff.kpiService.num : 0;
-                const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
-                if (currentGroup === 'Leader') {
-                    displayKpiPercent = (serviceNum + whNum) / 2;
-                } else {
-                    displayKpiPercent = serviceNum;
-                }
+            // LUÔN LUÔN ƯU TIÊN LẤY DỮ LIỆU TỪ KPI SERVICE TỔNG HỢP ĐỂ LÀM KPI TỔNG KẾT
+            const serviceNum = staff.kpiService.hasData ? staff.kpiService.num : 0;
+            const whNum = staff.kpiWh.hasData ? staff.kpiWh.num : 0;
+            
+            let displayKpiPercent = serviceNum;
+            if (currentGroup === 'Leader' && staff.kpiWh.hasData) {
+                displayKpiPercent = (serviceNum + whNum) / 2; // Đối với trưởng trạm thì chia trung bình với điểm Kho
             }
+            
             document.getElementById('kpi-percent').innerText = Math.round(displayKpiPercent) + '%';
 
             let grade = staff.originalGrade;
